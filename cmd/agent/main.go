@@ -135,21 +135,40 @@ func main() {
 		jobsMu.Unlock()
 	}
 
-	// Discover crontab entries
+	// Discover crontab entries, then re-register to populate jobConfigs
 	if *discover {
 		go func() {
 			discovered := discovery.DiscoverCrontab()
-			if len(discovered) > 0 {
-				resp, err := c.ReportDiscoveredJobs(context.Background(), &pulseguardv1.ReportDiscoveredJobsRequest{
-					AgentId: agentID,
-					Jobs:    discovered,
-				})
-				if err != nil {
-					slog.Error("failed to report discovered jobs", "error", err)
-				} else {
-					slog.Info("discovered jobs reported", "imported", resp.GetImportedCount())
-				}
+			if len(discovered) == 0 {
+				return
 			}
+			_, err := c.ReportDiscoveredJobs(context.Background(), &pulseguardv1.ReportDiscoveredJobsRequest{
+				AgentId: agentID,
+				Jobs:    discovered,
+			})
+			if err != nil {
+				slog.Error("failed to report discovered jobs", "error", err)
+				return
+			}
+			slog.Info("discovered jobs reported", "count", len(discovered))
+
+			regResp2, err := c.Register(ctx, &pulseguardv1.RegisterRequest{
+				Hostname:     hostname,
+				Os:           runtime.GOOS,
+				Arch:         runtime.GOARCH,
+				AgentVersion: "0.1.0",
+				Labels:       map[string]string{},
+			})
+			if err != nil {
+				slog.Error("failed to re-register after discovery", "error", err)
+				return
+			}
+			for _, job := range regResp2.GetJobs() {
+				jobsMu.Lock()
+				jobConfigs[job.GetId()] = job
+				jobsMu.Unlock()
+			}
+			slog.Info("job configs loaded after discovery", "count", len(regResp2.GetJobs()))
 		}()
 	}
 

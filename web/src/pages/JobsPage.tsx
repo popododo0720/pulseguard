@@ -30,7 +30,7 @@ export function JobsPage() {
         />
         {selectedJob && (
           <div className="hidden lg:block">
-            <div className="sticky top-24 max-h-[calc(100vh-8rem)] overflow-hidden">
+            <div className="sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto">
               <JobDetail
                 job={selectedJob}
                 onClose={() => setSelectedJob(null)}

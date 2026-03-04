@@ -1,5 +1,7 @@
 # Binaries
 /bin/
+/server
+/agent
 *.exe
 *.exe~
 *.dll

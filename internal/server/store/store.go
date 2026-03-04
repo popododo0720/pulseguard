@@ -2,15 +2,11 @@ package store
 
 import (
 	"database/sql"
-	"embed"
 	"fmt"
 	"log/slog"
 
 	_ "modernc.org/sqlite"
 )
-
-//go:embed migrations
-var migrationsFS embed.FS
 
 // Store wraps the SQLite database connection.
 type Store struct {

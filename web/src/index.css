@@ -1,68 +1,223 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+    --radius-2xl: calc(var(--radius) + 8px);
+    --radius-3xl: calc(var(--radius) + 12px);
+    --radius-4xl: calc(var(--radius) + 16px);
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+
+    /* Toss Grey Scale */
+    --color-grey-50: #f9fafb;
+    --color-grey-100: #f2f4f6;
+    --color-grey-200: #e5e8eb;
+    --color-grey-300: #d1d6db;
+    --color-grey-400: #b0b8c1;
+    --color-grey-500: #8b95a1;
+    --color-grey-600: #6b7684;
+    --color-grey-700: #4e5968;
+    --color-grey-800: #333d4b;
+    --color-grey-900: #191f28;
+
+    /* Toss Blue (interactive only) */
+    --color-blue-50: #e8f3ff;
+    --color-blue-100: #c9e2ff;
+    --color-blue-500: #3182f6;
+    --color-blue-600: #2272eb;
+    --color-blue-700: #1b64da;
+
+    /* Status Colors */
+    --color-green-50: #e8faf5;
+    --color-green-500: #03b26c;
+    --color-red-50: #ffebee;
+    --color-red-500: #f04452;
+    --color-orange-50: #fff8e6;
+    --color-orange-500: #fe9800;
+
+    /* Typography */
+    --font-sans: "Pretendard Variable", "Pretendard", "Inter", system-ui, -apple-system, sans-serif;
+
+    /* Toss Easing */
+    --ease-toss: cubic-bezier(0.2, 0, 0, 1);
+
+    /* Border Radius */
+    --radius-card: 16px;
+    --radius-pill: 9999px;
+}
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    --radius: 0.625rem;
+    --background: #f9fafb;
+    --foreground: #191f28;
+    --card: #ffffff;
+    --card-foreground: #191f28;
+    --popover: #ffffff;
+    --popover-foreground: #191f28;
+    --primary: #3182f6;
+    --primary-foreground: #ffffff;
+    --secondary: #f2f4f6;
+    --secondary-foreground: #191f28;
+    --muted: #f2f4f6;
+    --muted-foreground: #8b95a1;
+    --accent: #f2f4f6;
+    --accent-foreground: #191f28;
+    --destructive: #f04452;
+    --border: #e5e8eb;
+    --input: #e5e8eb;
+    --ring: #3182f6;
+    --chart-1: #3182f6;
+    --chart-2: #03b26c;
+    --chart-3: #fe9800;
+    --chart-4: #f04452;
+    --chart-5: #8b95a1;
+    --sidebar: #191f28;
+    --sidebar-foreground: #ffffff;
+    --sidebar-primary: #3182f6;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: rgba(255, 255, 255, 0.1);
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: rgba(255, 255, 255, 0.08);
+    --sidebar-ring: #3182f6;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+.dark {
+    --background: #0d1117;
+    --foreground: #e5e8eb;
+    --card: #161b22;
+    --card-foreground: #e5e8eb;
+    --popover: #161b22;
+    --popover-foreground: #e5e8eb;
+    --primary: #3182f6;
+    --primary-foreground: #ffffff;
+    --secondary: #1c2128;
+    --secondary-foreground: #e5e8eb;
+    --muted: #1c2128;
+    --muted-foreground: #8b95a1;
+    --accent: #1c2128;
+    --accent-foreground: #e5e8eb;
+    --destructive: #f04452;
+    --border: rgba(255, 255, 255, 0.08);
+    --input: rgba(255, 255, 255, 0.12);
+    --ring: #3182f6;
+    --chart-1: #3182f6;
+    --chart-2: #03b26c;
+    --chart-3: #fe9800;
+    --chart-4: #f04452;
+    --chart-5: #8b95a1;
+    --sidebar: #0d1117;
+    --sidebar-foreground: #e5e8eb;
+    --sidebar-primary: #3182f6;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: rgba(255, 255, 255, 0.06);
+    --sidebar-accent-foreground: #e5e8eb;
+    --sidebar-border: rgba(255, 255, 255, 0.06);
+    --sidebar-ring: #3182f6;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+    body {
+        @apply bg-background text-foreground antialiased;
+        font-feature-settings: "ss01", "ss02", "cv01";
+    }
+}
+
+/* Toss-style animations */
+@keyframes fade-in-up {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+@keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
+}
+
+.animate-fade-in-up {
+    animation: fade-in-up 350ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.animate-pulse-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.stagger-1 { animation-delay: 50ms; }
+.stagger-2 { animation-delay: 100ms; }
+.stagger-3 { animation-delay: 150ms; }
+.stagger-4 { animation-delay: 200ms; }
+.stagger-5 { animation-delay: 250ms; }
+
+/* Toss button press effect */
+.toss-press {
+    transition: transform 150ms cubic-bezier(0.2, 0, 0, 1), opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+.toss-press:active {
+    transform: scale(0.97);
+    opacity: 0.7;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #d1d6db;
+    border-radius: 9999px;
+}
+.dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
 }

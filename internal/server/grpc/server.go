@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -277,7 +278,7 @@ func (s *Server) ReportDiscoveredJobs(ctx context.Context, req *pulseguardv1.Rep
 		job := &models.Job{
 			ID:             uuid.New().String(),
 			AgentID:        req.GetAgentId(),
-			Name:           fmt.Sprintf("discovered: %s", truncate(dj.GetCommand(), 50)),
+			Name:           extractJobName(dj.GetCommand(), dj.GetSchedule()),
 			Schedule:       dj.GetSchedule(),
 			Command:        dj.GetCommand(),
 			TimeoutSeconds: 3600,
@@ -373,6 +374,60 @@ func jobToProto(j *models.Job) *pulseguardv1.JobConfig {
 		Enabled: j.Enabled,
 		Env:     env,
 	}
+}
+
+// extractJobName creates a human-readable name from a cron command.
+// Examples:
+//
+//	"cd /opt/scripts && python metrics.py" → "metrics.py"
+//	"/usr/bin/backup.sh --full" → "backup.sh"
+//	"SCRIPT_DIR=/opt && cd $SCRIPT_DIR && ./run.sh" → "run.sh"
+func extractJobName(command, schedule string) string {
+	// Strip output redirection (everything after >> or >)
+	cmd := command
+	for _, op := range []string{">>", ">"} {
+		if idx := strings.Index(cmd, " "+op+" "); idx >= 0 {
+			cmd = cmd[:idx]
+		}
+	}
+
+	parts := strings.Fields(cmd)
+	var candidate string
+	for i := len(parts) - 1; i >= 0; i-- {
+		p := parts[i]
+		// Skip flags, env vars, operators, redirections
+		if strings.HasPrefix(p, "-") || strings.Contains(p, "=") ||
+			p == "&&" || p == "||" || p == "|" || p == ";" ||
+			strings.HasPrefix(p, ">") || strings.HasPrefix(p, "<") ||
+			strings.HasPrefix(p, "2>") || p == "2>&1" {
+			continue
+		}
+		// Skip shell variable references
+		if strings.HasPrefix(p, "$") {
+			continue
+		}
+		// Skip common shell commands and interpreters
+		if p == "cd" || p == "sh" || p == "bash" || p == "python" || p == "python3" ||
+			p == "node" || p == "perl" || p == "ruby" || p == "uv" || p == "run" {
+			continue
+		}
+		// Check if it looks like a script filename
+		base := filepath.Base(p)
+		if strings.Contains(base, ".") || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "./") {
+			candidate = base
+			break
+		}
+		if candidate == "" {
+			candidate = base
+		}
+	}
+	if candidate == "" {
+		candidate = truncate(command, 40)
+	}
+	if schedule != "" {
+		return fmt.Sprintf("%s (cron: %s)", candidate, schedule)
+	}
+	return candidate
 }
 
 func truncate(s string, maxLen int) string {

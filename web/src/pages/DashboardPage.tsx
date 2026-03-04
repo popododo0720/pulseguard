@@ -42,7 +42,7 @@ export function DashboardPage() {
         />
         <StatCard
           label="Recent Failures"
-          value={isLoading ? '—' : (stats?.recent_failures ?? 0)}
+          value={isLoading ? '—' : (stats?.recent_failures?.length ?? 0)}
           icon={AlertTriangle}
           delay={150}
         />

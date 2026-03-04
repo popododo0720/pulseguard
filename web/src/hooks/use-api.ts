@@ -82,7 +82,17 @@ export interface DashboardStats {
   total_agents: number
   total_jobs: number
   success_rate: number
-  recent_failures: number
+  recent_failures: Array<{
+    id: string
+    job_id: string
+    job_name?: string
+    status: string
+    exit_code: number
+    started_at: string
+    finished_at: string
+    duration_ms: number
+    trigger: string
+  }>
 }
 
 export interface ChartDataPoint {
@@ -185,5 +195,36 @@ export function useCreateWebhookEndpoint() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['webhook-endpoints'] })
     },
+  })
+}
+
+// ─── Notification & Settings ──────────────────────────────────────────────────
+
+export interface NotificationChannel {
+  id: string
+  type: string
+  name: string
+  config: string
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ServerSettings {
+  server_version: string
+  token_masked: string
+}
+
+export function useNotificationChannels() {
+  return useQuery({
+    queryKey: ['notification-channels'],
+    queryFn: () => api.get<NotificationChannel[]>('/notifications'),
+  })
+}
+
+export function useServerSettings() {
+  return useQuery({
+    queryKey: ['settings'],
+    queryFn: () => api.get<ServerSettings>('/settings'),
   })
 }

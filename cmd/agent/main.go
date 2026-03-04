@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -14,7 +16,7 @@ import (
 	pulseguardv1 "github.com/pulseguard/pulseguard/gen/pulseguard/v1"
 	"github.com/pulseguard/pulseguard/internal/agent/client"
 	"github.com/pulseguard/pulseguard/internal/agent/discovery"
-	"github.com/pulseguard/pulseguard/internal/agent/scheduler"
+	"github.com/pulseguard/pulseguard/internal/agent/executor"
 )
 
 func main() {
@@ -54,6 +56,11 @@ func main() {
 
 	hostname, _ := os.Hostname()
 
+	// Log saved agent ID if available
+	if savedID := loadSavedAgentID(); savedID != "" {
+		slog.Info("loaded saved agent ID", "agent_id", savedID)
+	}
+
 	// Register with server
 	regResp, err := c.Register(ctx, &pulseguardv1.RegisterRequest{
 		Hostname:     hostname,
@@ -73,6 +80,9 @@ func main() {
 		heartbeatInterval = 30 * time.Second
 	}
 
+	// Persist server-assigned agent ID for informational purposes
+	saveAgentID(agentID)
+
 	slog.Info("registered with server",
 		"agent_id", agentID,
 		"heartbeat_interval", heartbeatInterval,
@@ -83,49 +93,47 @@ func main() {
 	var jobsMu sync.RWMutex
 	jobConfigs := make(map[string]*pulseguardv1.JobConfig)
 
-	// Report function — sends results to server
-	reportFn := func(req *pulseguardv1.ReportJobResultRequest) {
-		resp, err := c.ReportJobResult(context.Background(), req)
-		if err != nil {
-			slog.Error("failed to report job result", "error", err)
-			return
+	// executeAndReport runs a job via executor and reports the result.
+	executeAndReport := func(job *pulseguardv1.JobConfig, execID, trigger string, retryCount int) {
+		slog.Info("executing job", "job_id", job.GetId(), "name", job.GetName(), "trigger", trigger)
+
+		env := job.GetEnv()
+		if env == nil {
+			env = map[string]string{}
 		}
-		slog.Info("job result reported",
-			"job_id", req.GetJobId(),
-			"status", resp.GetStatus(),
-			"should_retry", resp.GetShouldRetry(),
+
+		result := executor.Run(
+			context.Background(),
+			job.GetCommand(),
+			job.GetWorkingDir(),
+			env,
+			int(job.GetTimeoutSeconds()),
 		)
 
-		// Handle retry
-		if resp.GetShouldRetry() {
-			delay := time.Duration(resp.GetRetryDelaySeconds()) * time.Second
-			slog.Info("retrying job after delay", "job_id", req.GetJobId(), "delay", delay)
-			time.Sleep(delay)
-
-			jobsMu.RLock()
-			job, ok := jobConfigs[req.GetJobId()]
-			jobsMu.RUnlock()
-			if ok {
-				sched.RunJobNow(job, req.GetExecutionId()+"-retry", "retry")
-			}
+		req := &pulseguardv1.ReportJobResultRequest{
+			AgentId:        agentID,
+			JobId:          job.GetId(),
+			ExecutionId:    execID,
+			ExitCode:       int32(result.ExitCode),
+			Stdout:         result.Stdout,
+			Stderr:         result.Stderr,
+			StartedAtUnix:  result.StartedAt.Unix(),
+			FinishedAtUnix: result.FinishedAt.Unix(),
+			DurationMs:     result.DurationMs,
+			Trigger:        trigger,
+			RetryCount:     int32(retryCount),
+			Error:          result.Error,
 		}
+
+		reportFn(c, req, &jobsMu, jobConfigs)
 	}
 
-	// Create scheduler (assign to package-level var so reportFn closure can use it)
-	sched = scheduler.New(agentID, reportFn)
-
-	// Add initial jobs
+	// Store initial job configs (no scheduling — cron wrapper handles execution)
 	for _, job := range regResp.GetJobs() {
 		jobsMu.Lock()
 		jobConfigs[job.GetId()] = job
 		jobsMu.Unlock()
-		if err := sched.AddJob(job); err != nil {
-			slog.Error("failed to add job", "job_id", job.GetId(), "error", err)
-		}
 	}
-
-	sched.Start()
-	defer sched.Stop()
 
 	// Discover crontab entries
 	if *discover {
@@ -198,7 +206,7 @@ func main() {
 					job, ok := jobConfigs[p.RunJob.GetJobId()]
 					jobsMu.RUnlock()
 					if ok {
-						sched.RunJobNow(job, p.RunJob.GetExecutionId(), p.RunJob.GetTrigger())
+						go executeAndReport(job, p.RunJob.GetExecutionId(), p.RunJob.GetTrigger(), 0)
 					} else {
 						slog.Warn("received run command for unknown job", "job_id", p.RunJob.GetJobId())
 					}
@@ -213,9 +221,6 @@ func main() {
 						jobsMu.Lock()
 						jobConfigs[job.GetId()] = job
 						jobsMu.Unlock()
-						if err := sched.AddJob(job); err != nil {
-							slog.Error("failed to update job", "job_id", job.GetId(), "error", err)
-						}
 					}
 				}
 			}
@@ -229,6 +234,79 @@ func main() {
 	slog.Info("shutting down agent...")
 }
 
-// sched is declared at package level so the reportFn closure can reference it.
-// This is set during main() execution before the reportFn is ever called.
-var sched *scheduler.Scheduler
+// reportFn sends job results to server and handles retries.
+func reportFn(c *client.Client, req *pulseguardv1.ReportJobResultRequest, jobsMu *sync.RWMutex, jobConfigs map[string]*pulseguardv1.JobConfig) {
+	resp, err := c.ReportJobResult(context.Background(), req)
+	if err != nil {
+		slog.Error("failed to report job result", "error", err)
+		return
+	}
+	slog.Info("job result reported",
+		"job_id", req.GetJobId(),
+		"status", resp.GetStatus(),
+		"should_retry", resp.GetShouldRetry(),
+	)
+
+	// Handle retry
+	if resp.GetShouldRetry() {
+		delay := time.Duration(resp.GetRetryDelaySeconds()) * time.Second
+		slog.Info("retrying job after delay", "job_id", req.GetJobId(), "delay", delay)
+		time.Sleep(delay)
+
+		jobsMu.RLock()
+		job, ok := jobConfigs[req.GetJobId()]
+		jobsMu.RUnlock()
+		if ok {
+			env := job.GetEnv()
+			if env == nil {
+				env = map[string]string{}
+			}
+			go func() {
+				result := executor.Run(
+					context.Background(),
+					job.GetCommand(),
+					job.GetWorkingDir(),
+					env,
+					int(job.GetTimeoutSeconds()),
+				)
+				retryReq := &pulseguardv1.ReportJobResultRequest{
+					AgentId:        req.GetAgentId(),
+					JobId:          job.GetId(),
+					ExecutionId:    req.GetExecutionId() + "-retry",
+					ExitCode:       int32(result.ExitCode),
+					Stdout:         result.Stdout,
+					Stderr:         result.Stderr,
+					StartedAtUnix:  result.StartedAt.Unix(),
+					FinishedAtUnix: result.FinishedAt.Unix(),
+					DurationMs:     result.DurationMs,
+					Trigger:        "retry",
+					RetryCount:     req.GetRetryCount() + 1,
+					Error:          result.Error,
+				}
+				reportFn(c, retryReq, jobsMu, jobConfigs)
+			}()
+		}
+	}
+}
+
+const agentIDFile = "/var/lib/pulseguard/agent-id"
+
+// loadSavedAgentID reads the previously saved agent ID from disk.
+func loadSavedAgentID() string {
+	data, err := os.ReadFile(agentIDFile)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// saveAgentID persists the server-assigned agent ID to disk.
+func saveAgentID(id string) {
+	if err := os.MkdirAll(filepath.Dir(agentIDFile), 0755); err != nil {
+		slog.Warn("failed to create agent ID directory", "error", err)
+		return
+	}
+	if err := os.WriteFile(agentIDFile, []byte(id), 0644); err != nil {
+		slog.Warn("failed to save agent ID", "error", err)
+	}
+}

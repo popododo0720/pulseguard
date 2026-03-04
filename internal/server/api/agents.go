@@ -31,6 +31,17 @@ func getAgentHandler(s *store.Store) http.HandlerFunc {
 	}
 }
 
+func deleteAgentHandler(s *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		if err := s.DeleteAgent(id); err != nil {
+			writeError(w, http.StatusNotFound, "agent not found")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)

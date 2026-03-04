@@ -66,6 +66,18 @@ func (s *Store) AgentCount() (int, error) {
 	return count, err
 }
 
+func (s *Store) DeleteAgent(id string) error {
+	result, err := s.db.Exec(`DELETE FROM agents WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("agent not found")
+	}
+	return nil
+}
+
 func scanAgent(row *sql.Row) (*models.Agent, error) {
 	var a models.Agent
 	var labelsJSON string

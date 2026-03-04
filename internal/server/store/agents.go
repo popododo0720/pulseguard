@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/pulseguard/pulseguard/internal/models"
 )
@@ -25,6 +24,17 @@ func (s *Store) CreateAgent(a *models.Agent) error {
 func (s *Store) GetAgent(id string) (*models.Agent, error) {
 	row := s.db.QueryRow(`SELECT id, name, hostname, ip_address, os, arch, agent_version, labels, status, last_heartbeat_at, registered_at, updated_at FROM agents WHERE id = ?`, id)
 	return scanAgent(row)
+}
+
+func (s *Store) GetAgentByHostname(hostname string) (*models.Agent, error) {
+	row := s.db.QueryRow(`SELECT id, name, hostname, ip_address, os, arch, agent_version, labels, status, last_heartbeat_at, registered_at, updated_at FROM agents WHERE hostname = ? ORDER BY registered_at DESC LIMIT 1`, hostname)
+	return scanAgent(row)
+}
+
+func (s *Store) UpdateAgentInfo(id, hostname, ipAddress, os, arch, version string) error {
+	_, err := s.db.Exec(`UPDATE agents SET hostname=?, ip_address=?, os=?, arch=?, agent_version=?, status='online', last_heartbeat_at=datetime('now'), updated_at=datetime('now') WHERE id=?`,
+		hostname, ipAddress, os, arch, version, id)
+	return err
 }
 
 func (s *Store) ListAgents() ([]*models.Agent, error) {
@@ -71,11 +81,13 @@ func scanAgent(row *sql.Row) (*models.Agent, error) {
 		a.Labels = map[string]string{}
 	}
 	if lastHB.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", lastHB.String)
-		a.LastHeartbeatAt = &t
+		t := parseDBTime(lastHB.String)
+		if !t.IsZero() {
+			a.LastHeartbeatAt = &t
+		}
 	}
-	a.RegisteredAt, _ = time.Parse("2006-01-02 15:04:05", regAt)
-	a.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updAt)
+	a.RegisteredAt = parseDBTime(regAt)
+	a.UpdatedAt = parseDBTime(updAt)
 	return &a, nil
 }
 
@@ -94,10 +106,12 @@ func scanAgentRows(rows *sql.Rows) (*models.Agent, error) {
 		a.Labels = map[string]string{}
 	}
 	if lastHB.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", lastHB.String)
-		a.LastHeartbeatAt = &t
+		t := parseDBTime(lastHB.String)
+		if !t.IsZero() {
+			a.LastHeartbeatAt = &t
+		}
 	}
-	a.RegisteredAt, _ = time.Parse("2006-01-02 15:04:05", regAt)
-	a.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updAt)
+	a.RegisteredAt = parseDBTime(regAt)
+	a.UpdatedAt = parseDBTime(updAt)
 	return &a, nil
 }

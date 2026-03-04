@@ -2,6 +2,9 @@ package api
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pulseguard/pulseguard/internal/server/grpc"
@@ -11,7 +14,12 @@ import (
 )
 
 // NewRouter creates and configures the chi router with all API routes.
-func NewRouter(s *store.Store, dispatcher *grpc.CommandDispatcher, proxy *webhook.Proxy, devMode bool) http.Handler {
+func NewRouter(s *store.Store, dispatcher *grpc.CommandDispatcher, proxy *webhook.Proxy, devMode bool, webDir string, token ...string) http.Handler {
+	authToken := ""
+	if len(token) > 0 {
+		authToken = token[0]
+	}
+
 	r := chi.NewRouter()
 
 	// Middleware
@@ -37,6 +45,7 @@ func NewRouter(s *store.Store, dispatcher *grpc.CommandDispatcher, proxy *webhoo
 		r.Delete("/jobs/{id}", deleteJobHandler(s))
 		r.Post("/jobs/{id}/rerun", rerunJobHandler(s, dispatcher))
 		r.Get("/jobs/{id}/executions", listJobExecutionsHandler(s))
+		r.Post("/jobs/{id}/report", reportJobResultHandler(s, authToken))
 
 		// Webhook endpoints
 		r.Get("/webhook-endpoints", listWebhookEndpointsHandler(s))
@@ -51,6 +60,11 @@ func NewRouter(s *store.Store, dispatcher *grpc.CommandDispatcher, proxy *webhoo
 	// Webhook receiver (not under /api, no JSON middleware)
 	r.Post("/wh/{slug}", webhookReceiverHandler(s, proxy))
 
+	// SPA static file serving (production mode)
+	if !devMode && webDir != "" {
+		r.Get("/*", spaHandler(webDir))
+	}
+
 	var handler http.Handler = r
 	if devMode {
 		c := cors.New(cors.Options{
@@ -63,4 +77,25 @@ func NewRouter(s *store.Store, dispatcher *grpc.CommandDispatcher, proxy *webhoo
 	}
 
 	return handler
+}
+
+// spaHandler serves static files from webDir, falling back to index.html for SPA routing.
+func spaHandler(webDir string) http.HandlerFunc {
+	fs := http.Dir(webDir)
+	fileServer := http.FileServer(fs)
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if path == "/" {
+			path = "/index.html"
+		}
+
+		fullPath := filepath.Join(webDir, filepath.Clean(strings.TrimPrefix(path, "/")))
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+			return
+		}
+
+		fileServer.ServeHTTP(w, r)
+	}
 }

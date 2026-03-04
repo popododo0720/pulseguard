@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
-	"time"
 
 	"github.com/pulseguard/pulseguard/internal/models"
 )
@@ -87,7 +86,7 @@ func (s *Store) GetWebhookRequest(id string) (*models.WebhookRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	r.ReceivedAt, _ = time.Parse("2006-01-02 15:04:05", receivedAt)
+	r.ReceivedAt = parseDBTime(receivedAt)
 	return &r, nil
 }
 
@@ -105,7 +104,7 @@ func (s *Store) ListWebhookRequests(endpointID string, limit int) ([]*models.Web
 		if err := rows.Scan(&r.ID, &r.EndpointID, &r.Method, &r.Headers, &r.Body, &r.QueryParams, &r.SourceIP, &receivedAt); err != nil {
 			return nil, err
 		}
-		r.ReceivedAt, _ = time.Parse("2006-01-02 15:04:05", receivedAt)
+		r.ReceivedAt = parseDBTime(receivedAt)
 		reqs = append(reqs, &r)
 	}
 	return reqs, rows.Err()
@@ -151,11 +150,13 @@ func scanWebhookEndpoint(row *sql.Row) (*models.WebhookEndpoint, error) {
 	}
 	e.Enabled = enabled == 1
 	if lastReq.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", lastReq.String)
-		e.LastRequestAt = &t
+		t := parseDBTime(lastReq.String)
+		if !t.IsZero() {
+			e.LastRequestAt = &t
+		}
 	}
-	e.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	e.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	e.CreatedAt = parseDBTime(createdAt)
+	e.UpdatedAt = parseDBTime(updatedAt)
 	return &e, nil
 }
 
@@ -175,10 +176,12 @@ func scanWebhookEndpointRows(rows *sql.Rows) (*models.WebhookEndpoint, error) {
 	}
 	e.Enabled = enabled == 1
 	if lastReq.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", lastReq.String)
-		e.LastRequestAt = &t
+		t := parseDBTime(lastReq.String)
+		if !t.IsZero() {
+			e.LastRequestAt = &t
+		}
 	}
-	e.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	e.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	e.CreatedAt = parseDBTime(createdAt)
+	e.UpdatedAt = parseDBTime(updatedAt)
 	return &e, nil
 }

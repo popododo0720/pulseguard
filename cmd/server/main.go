@@ -31,6 +31,7 @@ func main() {
 	dbPath := flag.String("db", "./pulseguard.db", "SQLite database path")
 	devMode := flag.Bool("dev", false, "Enable dev mode (CORS for localhost:5173)")
 	token := flag.String("token", os.Getenv("PULSEGUARD_TOKEN"), "Auth token for agent connections")
+	webDir := flag.String("web-dir", "./web/dist", "Path to web UI static files")
 	flag.Parse()
 
 	slog.Info("starting PulseGuard server",
@@ -71,7 +72,7 @@ func main() {
 	pulseguardv1.RegisterAgentServiceServer(grpcServer, agentSvc)
 
 	// REST server
-	router := api.NewRouter(s, dispatcher, proxy, *devMode)
+	router := api.NewRouter(s, dispatcher, proxy, *devMode, *webDir, *token)
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", *port),
 		Handler: router,

@@ -9,11 +9,33 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Plus } from 'lucide-react'
+import { useCreateJob, useAgents } from '@/hooks/use-api'
 
 export function CreateJobDialog() {
   const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [schedule, setSchedule] = useState('')
+  const [command, setCommand] = useState('')
+  const [agentId, setAgentId] = useState('')
+  const createJob = useCreateJob()
+  const { data: agents } = useAgents()
+
+  const handleSubmit = () => {
+    if (!name || !schedule || !command) return
+    createJob.mutate(
+      { name, schedule, command, agent_id: agentId || undefined } as never,
+      {
+        onSuccess: () => {
+          setOpen(false)
+          setName('')
+          setSchedule('')
+          setCommand('')
+          setAgentId('')
+        },
+      },
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -36,6 +58,8 @@ export function CreateJobDialog() {
             </Label>
             <Input
               placeholder="e.g. Database Backup"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               className="h-10 rounded-xl border-grey-200 bg-white text-sm dark:border-white/10 dark:bg-white/5"
             />
           </div>
@@ -45,6 +69,8 @@ export function CreateJobDialog() {
             </Label>
             <Input
               placeholder="e.g. 0 2 * * *"
+              value={schedule}
+              onChange={(e) => setSchedule(e.target.value)}
               className="h-10 rounded-xl border-grey-200 bg-white font-mono text-sm dark:border-white/10 dark:bg-white/5"
             />
           </div>
@@ -54,17 +80,27 @@ export function CreateJobDialog() {
             </Label>
             <Input
               placeholder="e.g. /opt/scripts/backup.sh"
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
               className="h-10 rounded-xl border-grey-200 bg-white font-mono text-sm dark:border-white/10 dark:bg-white/5"
             />
           </div>
           <div className="space-y-2">
             <Label className="text-sm font-medium text-grey-700 dark:text-grey-300">
-              Description
+              Agent
             </Label>
-            <Textarea
-              placeholder="What does this job do?"
-              className="min-h-[80px] rounded-xl border-grey-200 bg-white text-sm dark:border-white/10 dark:bg-white/5"
-            />
+            <select
+              value={agentId}
+              onChange={(e) => setAgentId(e.target.value)}
+              className="h-10 w-full rounded-xl border border-grey-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-white/5 dark:text-grey-300"
+            >
+              <option value="">Select an agent...</option>
+              {agents?.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.hostname || agent.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button
@@ -76,9 +112,10 @@ export function CreateJobDialog() {
             </Button>
             <Button
               className="toss-press h-9 rounded-xl bg-blue-500 px-6 text-sm font-medium text-white hover:bg-blue-600"
-              onClick={() => setOpen(false)}
+              onClick={handleSubmit}
+              disabled={createJob.isPending || !name || !schedule || !command}
             >
-              Create Job
+              {createJob.isPending ? 'Creating...' : 'Create Job'}
             </Button>
           </div>
         </div>

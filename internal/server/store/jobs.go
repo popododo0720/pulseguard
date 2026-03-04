@@ -46,6 +46,30 @@ func (s *Store) ListJobs() ([]*models.Job, error) {
 	return jobs, rows.Err()
 }
 
+func (s *Store) JobExistsByCommand(agentID, command string) (bool, error) {
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM jobs WHERE command = ? AND (agent_id = ? OR source = 'discovered')`, command, agentID).Scan(&count)
+	return count > 0, err
+}
+
+func (s *Store) ListJobsBySource(source string) ([]*models.Job, error) {
+	rows, err := s.db.Query(`SELECT id, agent_id, name, schedule, command, working_dir, timeout_seconds, success_conditions, failure_policy, env, enabled, source, last_status, last_run_at, created_at, updated_at FROM jobs WHERE source = ? ORDER BY created_at DESC`, source)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var jobs []*models.Job
+	for rows.Next() {
+		j, err := scanJobRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
 func (s *Store) ListJobsByAgent(agentID string) ([]*models.Job, error) {
 	rows, err := s.db.Query(`SELECT id, agent_id, name, schedule, command, working_dir, timeout_seconds, success_conditions, failure_policy, env, enabled, source, last_status, last_run_at, created_at, updated_at FROM jobs WHERE agent_id = ? ORDER BY created_at DESC`, agentID)
 	if err != nil {
@@ -191,11 +215,13 @@ func populateJob(j *models.Job, scJSON, fpJSON, envJSON string, enabled int, las
 	}
 	j.Enabled = enabled == 1
 	if lastRun.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", lastRun.String)
-		j.LastRunAt = &t
+		t := parseDBTime(lastRun.String)
+		if !t.IsZero() {
+			j.LastRunAt = &t
+		}
 	}
-	j.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	j.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	j.CreatedAt = parseDBTime(createdAt)
+	j.UpdatedAt = parseDBTime(updatedAt)
 	return j
 }
 
@@ -215,11 +241,13 @@ func scanExecRows(rows *sql.Rows) (*models.JobExecution, error) {
 		ec := int(exitCode.Int64)
 		e.ExitCode = &ec
 	}
-	e.StartedAt, _ = time.Parse("2006-01-02 15:04:05", startedAt)
-	e.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+	e.StartedAt = parseDBTime(startedAt)
+	e.CreatedAt = parseDBTime(createdAt)
 	if finishedAt.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", finishedAt.String)
-		e.FinishedAt = &t
+		t := parseDBTime(finishedAt.String)
+		if !t.IsZero() {
+			e.FinishedAt = &t
+		}
 	}
 	if durationMs.Valid {
 		d := durationMs.Int64
@@ -240,4 +268,23 @@ func nullTimeStr(t *time.Time) interface{} {
 		return nil
 	}
 	return t.UTC().Format("2006-01-02 15:04:05")
+}
+
+var timeFormats = []string{
+	"2006-01-02 15:04:05",
+	"2006-01-02T15:04:05Z",
+	"2006-01-02T15:04:05Z07:00",
+	time.RFC3339,
+	time.RFC3339Nano,
+	"2006-01-02 15:04:05+00:00",
+	"2006-01-02 15:04:05-07:00",
+}
+
+func parseDBTime(s string) time.Time {
+	for _, f := range timeFormats {
+		if t, err := time.Parse(f, s); err == nil {
+			return t.UTC()
+		}
+	}
+	return time.Time{}
 }

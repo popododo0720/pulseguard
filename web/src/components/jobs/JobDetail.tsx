@@ -1,9 +1,11 @@
 import { cn } from '@/lib/utils'
-import { useJobExecutions, formatDateTime } from '@/hooks/use-mock-data'
+import { formatDateTime, formatDurationMs } from '@/lib/utils'
+import { useJobExecutions, useAgents, useRerunJob } from '@/hooks/use-api'
+import type { Job, JobStatus } from '@/hooks/use-api'
+import { useMemo } from 'react'
 import { X, Play, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import type { Job, JobStatus } from '@/lib/mock-data'
 
 function StatusBadge({ status }: { status: JobStatus }) {
   return (
@@ -36,7 +38,15 @@ interface JobDetailProps {
 }
 
 export function JobDetail({ job, onClose }: JobDetailProps) {
-  const executions = useJobExecutions(job.id)
+  const { data: executions, isLoading } = useJobExecutions(job.id)
+  const { data: agents } = useAgents()
+  const rerunJob = useRerunJob()
+
+  const agentName = useMemo(() => {
+    if (!agents?.length || !job.agent_id) return job.agent_id || '—'
+    const agent = agents.find((a) => a.id === job.agent_id)
+    return agent?.hostname || agent?.name || job.agent_id
+  }, [agents, job.agent_id])
 
   return (
     <div className="animate-fade-in-up flex h-full flex-col rounded-2xl bg-white dark:bg-[#161b22]">
@@ -44,7 +54,7 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
       <div className="flex items-center justify-between border-b border-grey-100 p-6 dark:border-white/5">
         <div>
           <h3 className="text-lg font-semibold text-grey-900 dark:text-white">{job.name}</h3>
-          <p className="mt-0.5 text-sm text-grey-500">{job.description}</p>
+          <p className="mt-0.5 text-sm text-grey-500">{job.working_dir || job.command}</p>
         </div>
         <Button
           variant="ghost"
@@ -62,12 +72,12 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
           <div>
             <span className="text-xs text-grey-500">Status</span>
             <div className="mt-1">
-              <StatusBadge status={job.status} />
+              <StatusBadge status={job.last_status} />
             </div>
           </div>
           <div>
             <span className="text-xs text-grey-500">Agent</span>
-            <p className="mt-1 text-sm font-medium text-grey-900 dark:text-grey-100">{job.agentName}</p>
+            <p className="mt-1 text-sm font-medium text-grey-900 dark:text-grey-100">{agentName}</p>
           </div>
           <div>
             <span className="text-xs text-grey-500">Schedule</span>
@@ -76,8 +86,10 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
             </code>
           </div>
           <div>
-            <span className="text-xs text-grey-500">Duration</span>
-            <p className="mt-1 text-sm font-medium text-grey-900 dark:text-grey-100">{job.duration}</p>
+            <span className="text-xs text-grey-500">Last Run</span>
+            <p className="mt-1 text-sm font-medium text-grey-900 dark:text-grey-100">
+              {formatDateTime(job.last_run_at)}
+            </p>
           </div>
         </div>
 
@@ -92,9 +104,11 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
         <div className="flex gap-3 pt-1">
           <Button
             className="toss-press h-9 rounded-xl bg-blue-500 px-4 text-sm font-medium text-white hover:bg-blue-600"
+            onClick={() => rerunJob.mutate(job.id)}
+            disabled={rerunJob.isPending}
           >
             <Play className="mr-1.5 h-3.5 w-3.5" />
-            Run Now
+            {rerunJob.isPending ? 'Running...' : 'Run Now'}
           </Button>
         </div>
       </div>
@@ -105,7 +119,11 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
       <div className="flex-1 overflow-y-auto p-6">
         <h4 className="text-sm font-semibold text-grey-900 dark:text-white">Execution History</h4>
         <div className="mt-3 space-y-2">
-          {executions.length === 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-grey-200 border-t-blue-500" />
+            </div>
+          ) : !executions?.length ? (
             <p className="py-4 text-center text-sm text-grey-500">No executions yet</p>
           ) : (
             executions.map((exec) => (
@@ -115,14 +133,14 @@ export function JobDetail({ job, onClose }: JobDetailProps) {
               >
                 <div className="flex items-center justify-between">
                   <StatusBadge status={exec.status} />
-                  <span className="text-xs text-grey-400">{formatDateTime(exec.startedAt)}</span>
+                  <span className="text-xs text-grey-400">{formatDateTime(exec.started_at)}</span>
                 </div>
                 <p className="mt-2 truncate text-xs text-grey-600 dark:text-grey-400">
-                  {exec.output}
+                  {exec.stdout || exec.stderr || exec.error || '—'}
                 </p>
                 <div className="mt-1 flex items-center gap-3 text-xs text-grey-400">
-                  <span>Duration: {exec.duration}</span>
-                  {exec.exitCode >= 0 && <span>Exit: {exec.exitCode}</span>}
+                  <span>Duration: {formatDurationMs(exec.duration_ms)}</span>
+                  {exec.exit_code >= 0 && <span>Exit: {exec.exit_code}</span>}
                 </div>
               </div>
             ))

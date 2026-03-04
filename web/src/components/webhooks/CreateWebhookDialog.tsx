@@ -9,11 +9,30 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Plus } from 'lucide-react'
+import { useCreateWebhookEndpoint } from '@/hooks/use-api'
 
 export function CreateWebhookDialog() {
   const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [slug, setSlug] = useState('')
+  const [targetUrl, setTargetUrl] = useState('')
+  const createWebhook = useCreateWebhookEndpoint()
+
+  const handleSubmit = () => {
+    if (!name || !slug) return
+    createWebhook.mutate(
+      { name, slug, target_url: targetUrl || undefined } as never,
+      {
+        onSuccess: () => {
+          setOpen(false)
+          setName('')
+          setSlug('')
+          setTargetUrl('')
+        },
+      },
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -36,6 +55,8 @@ export function CreateWebhookDialog() {
             </Label>
             <Input
               placeholder="e.g. GitHub Deploy Hook"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               className="h-10 rounded-xl border-grey-200 bg-white text-sm dark:border-white/10 dark:bg-white/5"
             />
           </div>
@@ -49,17 +70,21 @@ export function CreateWebhookDialog() {
               </span>
               <Input
                 placeholder="github-deploy"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
                 className="h-10 border-0 bg-white text-sm focus-visible:ring-0 dark:bg-transparent rounded-l-none"
               />
             </div>
           </div>
           <div className="space-y-2">
             <Label className="text-sm font-medium text-grey-700 dark:text-grey-300">
-              Description
+              Target URL
             </Label>
-            <Textarea
-              placeholder="What is this webhook for?"
-              className="min-h-[80px] rounded-xl border-grey-200 bg-white text-sm dark:border-white/10 dark:bg-white/5"
+            <Input
+              placeholder="https://example.com/webhook"
+              value={targetUrl}
+              onChange={(e) => setTargetUrl(e.target.value)}
+              className="h-10 rounded-xl border-grey-200 bg-white text-sm dark:border-white/10 dark:bg-white/5"
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
@@ -72,9 +97,10 @@ export function CreateWebhookDialog() {
             </Button>
             <Button
               className="toss-press h-9 rounded-xl bg-blue-500 px-6 text-sm font-medium text-white hover:bg-blue-600"
-              onClick={() => setOpen(false)}
+              onClick={handleSubmit}
+              disabled={createWebhook.isPending || !name || !slug}
             >
-              Create Webhook
+              {createWebhook.isPending ? 'Creating...' : 'Create Webhook'}
             </Button>
           </div>
         </div>

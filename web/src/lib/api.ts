@@ -41,7 +41,8 @@ class ApiClient {
       ...fetchOptions,
     })
     if (!response.ok) throw new Error(`POST ${path} failed: ${response.statusText}`)
-    return response.json()
+    const text = await response.text()
+    return text ? JSON.parse(text) : (undefined as unknown as T)
   }
 
   async put<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
@@ -64,7 +65,8 @@ class ApiClient {
       ...fetchOptions,
     })
     if (!response.ok) throw new Error(`DELETE ${path} failed: ${response.statusText}`)
-    return response.json()
+    const text = await response.text()
+    return text ? JSON.parse(text) : (undefined as unknown as T)
   }
 }
 

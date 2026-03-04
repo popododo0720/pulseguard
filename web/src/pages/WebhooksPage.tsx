@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { WebhookList } from '@/components/webhooks/WebhookList'
 import { WebhookDetail } from '@/components/webhooks/WebhookDetail'
 import { CreateWebhookDialog } from '@/components/webhooks/CreateWebhookDialog'
-import type { WebhookEndpoint } from '@/lib/mock-data'
+import type { WebhookEndpoint } from '@/hooks/use-api'
 
 export function WebhooksPage() {
   const [selectedWebhook, setSelectedWebhook] = useState<WebhookEndpoint | null>(null)

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { JobList } from '@/components/jobs/JobList'
 import { JobDetail } from '@/components/jobs/JobDetail'
 import { CreateJobDialog } from '@/components/jobs/CreateJobDialog'
-import type { Job } from '@/lib/mock-data'
+import type { Job } from '@/hooks/use-api'
 
 export function JobsPage() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null)

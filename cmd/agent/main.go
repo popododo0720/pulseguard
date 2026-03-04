@@ -18,6 +18,19 @@ import (
 )
 
 func main() {
+	// Check for subcommands before flag.Parse()
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "wrap":
+			runWrap(os.Args[2:])
+			return
+		case "apply-wrapper":
+			runApplyWrapper(os.Args[2:])
+			return
+		}
+	}
+
+	// Daemon mode (original behavior)
 	server := flag.String("server", "", "gRPC server address (required, e.g., localhost:9090)")
 	token := flag.String("token", os.Getenv("PULSEGUARD_TOKEN"), "Auth token")
 	discover := flag.Bool("discover", false, "Discover and report crontab entries on startup")

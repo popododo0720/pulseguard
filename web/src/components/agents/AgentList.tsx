@@ -1,9 +1,26 @@
 import { cn } from '@/lib/utils'
-import { useAgents, formatRelativeTime } from '@/hooks/use-mock-data'
+import { formatRelativeTime } from '@/lib/utils'
+import { useAgents } from '@/hooks/use-api'
 import { Monitor, Cpu, Clock } from 'lucide-react'
 
 export function AgentList() {
-  const agents = useAgents()
+  const { data: agents, isLoading } = useAgents()
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-grey-200 border-t-blue-500" />
+      </div>
+    )
+  }
+
+  if (!agents?.length) {
+    return (
+      <div className="rounded-2xl bg-white p-16 text-center dark:bg-[#161b22]">
+        <p className="text-sm text-grey-400">No agents connected yet</p>
+      </div>
+    )
+  }
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -21,9 +38,9 @@ export function AgentList() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-grey-900 dark:text-white">
-                  {agent.hostname}
+                  {agent.hostname || agent.name}
                 </h3>
-                <p className="mt-0.5 text-xs text-grey-500">{agent.ip}</p>
+                <p className="mt-0.5 text-xs text-grey-500">{agent.ip_address}</p>
               </div>
             </div>
             <span
@@ -54,7 +71,7 @@ export function AgentList() {
                 <span className="text-xs text-grey-500">OS</span>
               </div>
               <span className="text-xs font-medium text-grey-700 dark:text-grey-300">
-                {agent.os}
+                {agent.os}{agent.arch ? ` (${agent.arch})` : ''}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -63,21 +80,15 @@ export function AgentList() {
                 <span className="text-xs text-grey-500">Last Heartbeat</span>
               </div>
               <span className="text-xs font-medium text-grey-700 dark:text-grey-300">
-                {formatRelativeTime(agent.lastHeartbeat)}
+                {formatRelativeTime(agent.last_heartbeat_at)}
               </span>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="mt-5 flex items-center justify-between border-t border-grey-100 pt-4 dark:border-white/5">
-            <div>
-              <span className="text-2xl font-bold text-grey-900 dark:text-white">
-                {agent.jobCount}
-              </span>
-              <span className="ml-1.5 text-xs text-grey-500">jobs assigned</span>
-            </div>
+          <div className="mt-5 flex items-center justify-end border-t border-grey-100 pt-4 dark:border-white/5">
             <span className="rounded-md bg-grey-100 px-2 py-0.5 text-[10px] text-grey-500 dark:bg-white/5 dark:text-grey-500">
-              v{agent.version}
+              v{agent.agent_version}
             </span>
           </div>
         </div>

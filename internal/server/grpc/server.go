@@ -103,30 +103,37 @@ func (s *Server) Register(ctx context.Context, req *pulseguardv1.RegisterRequest
 		return nil, err
 	}
 
-	agentID := uuid.New().String()
 	labelsMap := req.GetLabels()
 	if labelsMap == nil {
 		labelsMap = map[string]string{}
 	}
 
-	agent := &models.Agent{
-		ID:           agentID,
-		Name:         req.GetHostname(),
-		Hostname:     req.GetHostname(),
-		IPAddress:    req.GetIpAddress(),
-		OS:           req.GetOs(),
-		Arch:         req.GetArch(),
-		AgentVersion: req.GetAgentVersion(),
-		Labels:       labelsMap,
-		Status:       "online",
+	var agentID string
+	existing, err := s.store.GetAgentByHostname(req.GetHostname())
+	if err == nil && existing != nil {
+		agentID = existing.ID
+		_ = s.store.UpdateAgentInfo(agentID, req.GetHostname(), req.GetIpAddress(), req.GetOs(), req.GetArch(), req.GetAgentVersion())
+		slog.Info("agent re-registered", "agent_id", agentID, "hostname", req.GetHostname())
+	} else {
+		agentID = uuid.New().String()
+		agent := &models.Agent{
+			ID:           agentID,
+			Name:         req.GetHostname(),
+			Hostname:     req.GetHostname(),
+			IPAddress:    req.GetIpAddress(),
+			OS:           req.GetOs(),
+			Arch:         req.GetArch(),
+			AgentVersion: req.GetAgentVersion(),
+			Labels:       labelsMap,
+			Status:       "online",
+		}
+		if err := s.store.CreateAgent(agent); err != nil {
+			slog.Error("failed to create agent", "error", err)
+			return nil, status.Errorf(codes.Internal, "failed to register agent: %v", err)
+		}
+		slog.Info("agent registered", "agent_id", agentID, "hostname", req.GetHostname())
 	}
 
-	if err := s.store.CreateAgent(agent); err != nil {
-		slog.Error("failed to create agent", "error", err)
-		return nil, status.Errorf(codes.Internal, "failed to register agent: %v", err)
-	}
-
-	// Fetch jobs assigned to this agent
 	jobs, err := s.store.ListJobsByAgent(agentID)
 	if err != nil {
 		slog.Error("failed to list jobs", "error", err)
@@ -137,7 +144,6 @@ func (s *Server) Register(ctx context.Context, req *pulseguardv1.RegisterRequest
 		jobConfigs = append(jobConfigs, jobToProto(j))
 	}
 
-	slog.Info("agent registered", "agent_id", agentID, "hostname", req.GetHostname())
 	return &pulseguardv1.RegisterResponse{
 		AgentId:                  agentID,
 		HeartbeatIntervalSeconds: 30,
@@ -259,6 +265,15 @@ func (s *Server) ReportDiscoveredJobs(ctx context.Context, req *pulseguardv1.Rep
 
 	imported := int32(0)
 	for _, dj := range req.GetJobs() {
+		exists, err := s.store.JobExistsByCommand(req.GetAgentId(), dj.GetCommand())
+		if err != nil {
+			slog.Error("failed to check existing job", "error", err)
+			continue
+		}
+		if exists {
+			continue
+		}
+
 		job := &models.Job{
 			ID:             uuid.New().String(),
 			AgentID:        req.GetAgentId(),
@@ -274,7 +289,7 @@ func (s *Server) ReportDiscoveredJobs(ctx context.Context, req *pulseguardv1.Rep
 				RetryDelaySeconds: 60,
 			},
 			Env:        map[string]string{},
-			Enabled:    false, // discovered jobs start disabled
+			Enabled:    false,
 			Source:     "discovered",
 			LastStatus: "unknown",
 		}

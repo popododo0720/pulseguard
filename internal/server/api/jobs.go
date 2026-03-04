@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -28,7 +30,14 @@ type createJobRequest struct {
 
 func listJobsHandler(s *store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		jobs, err := s.ListJobs()
+		source := r.URL.Query().Get("source")
+		var jobs []*models.Job
+		var err error
+		if source != "" {
+			jobs, err = s.ListJobsBySource(source)
+		} else {
+			jobs, err = s.ListJobs()
+		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -178,8 +187,112 @@ func listJobExecutionsHandler(s *store.Store) http.HandlerFunc {
 	}
 }
 
+type jobReportRequest struct {
+	ExitCode   int    `json:"exit_code"`
+	Stdout     string `json:"stdout"`
+	Stderr     string `json:"stderr"`
+	StartedAt  string `json:"started_at"`
+	FinishedAt string `json:"finished_at"`
+	DurationMs int64  `json:"duration_ms"`
+	Trigger    string `json:"trigger"`
+	Error      string `json:"error"`
+}
+
+func reportJobResultHandler(s *store.Store, token string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if token != "" {
+			auth := r.Header.Get("Authorization")
+			if auth != "Bearer "+token {
+				writeError(w, http.StatusUnauthorized, "invalid or missing token")
+				return
+			}
+		}
+
+		jobID := chi.URLParam(r, "id")
+		job, err := s.GetJob(jobID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "job not found")
+			return
+		}
+
+		var req jobReportRequest
+		if err := decodeJSON(r, &req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+
+		startedAt, _ := time.Parse(time.RFC3339, req.StartedAt)
+		var finishedAt *time.Time
+		if req.FinishedAt != "" {
+			t, _ := time.Parse(time.RFC3339, req.FinishedAt)
+			finishedAt = &t
+		}
+
+		resultStatus := evaluateResult(job.SuccessConditions, req)
+
+		execID := uuid.New().String()
+		execution := &models.JobExecution{
+			ID:         execID,
+			JobID:      jobID,
+			AgentID:    job.AgentID,
+			Status:     resultStatus,
+			ExitCode:   &req.ExitCode,
+			Stdout:     req.Stdout,
+			Stderr:     req.Stderr,
+			Error:      req.Error,
+			StartedAt:  startedAt,
+			FinishedAt: finishedAt,
+			DurationMs: &req.DurationMs,
+			Trigger:    req.Trigger,
+		}
+
+		if err := s.CreateJobExecution(execution); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		_ = s.UpdateJobStatus(jobID, resultStatus)
+
+		shouldRetry := false
+		retryDelay := 0
+		if resultStatus == "failure" && job.FailurePolicy.MaxRetries > 0 {
+			shouldRetry = true
+			retryDelay = job.FailurePolicy.RetryDelaySeconds
+			if retryDelay == 0 {
+				retryDelay = 60
+			}
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"execution_id": execID,
+			"status":       resultStatus,
+			"should_retry": shouldRetry,
+			"retry_delay":  retryDelay,
+		})
+	}
+}
+
+func evaluateResult(sc models.SuccessConditions, req jobReportRequest) string {
+	if req.Error != "" {
+		return "failure"
+	}
+	if req.ExitCode != sc.ExpectedExitCode {
+		return "failure"
+	}
+	if sc.StdoutContains != "" && !strings.Contains(req.Stdout, sc.StdoutContains) {
+		return "failure"
+	}
+	if sc.StdoutEndswith != "" && !strings.HasSuffix(strings.TrimSpace(req.Stdout), sc.StdoutEndswith) {
+		return "failure"
+	}
+	if sc.StderrEmpty && strings.TrimSpace(req.Stderr) != "" {
+		return "failure"
+	}
+	return "success"
+}
+
 func decodeJSON(r *http.Request, v interface{}) error {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1MB max
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
 		return err
 	}

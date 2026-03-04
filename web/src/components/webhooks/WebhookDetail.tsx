@@ -1,16 +1,25 @@
-import { cn } from '@/lib/utils'
-import { useWebhookRequests, formatDateTime } from '@/hooks/use-mock-data'
-import { X, RotateCcw } from 'lucide-react'
+import { formatDateTime } from '@/lib/utils'
+import { useWebhookRequests } from '@/hooks/use-api'
+import type { WebhookEndpoint } from '@/hooks/use-api'
+import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { WebhookEndpoint } from '@/lib/mock-data'
 
 interface WebhookDetailProps {
   webhook: WebhookEndpoint
   onClose: () => void
 }
 
+function tryParseJson(str: string): string {
+  if (!str) return ''
+  try {
+    return JSON.stringify(JSON.parse(str), null, 2)
+  } catch {
+    return str
+  }
+}
+
 export function WebhookDetail({ webhook, onClose }: WebhookDetailProps) {
-  const requests = useWebhookRequests(webhook.id)
+  const { data: requests, isLoading } = useWebhookRequests(webhook.id)
 
   return (
     <div className="animate-fade-in-up flex h-full flex-col rounded-2xl bg-white dark:bg-[#161b22]">
@@ -18,7 +27,7 @@ export function WebhookDetail({ webhook, onClose }: WebhookDetailProps) {
       <div className="flex items-center justify-between border-b border-grey-100 p-6 dark:border-white/5">
         <div>
           <h3 className="text-lg font-semibold text-grey-900 dark:text-white">{webhook.name}</h3>
-          <p className="mt-0.5 text-sm text-grey-500">{webhook.description}</p>
+          <p className="mt-0.5 text-sm text-grey-500">{webhook.target_url}</p>
         </div>
         <Button
           variant="ghost"
@@ -34,7 +43,11 @@ export function WebhookDetail({ webhook, onClose }: WebhookDetailProps) {
       <div className="flex-1 overflow-y-auto p-6">
         <h4 className="text-sm font-semibold text-grey-900 dark:text-white">Recent Requests</h4>
         <div className="mt-3 space-y-3">
-          {requests.length === 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-grey-200 border-t-blue-500" />
+            </div>
+          ) : !requests?.length ? (
             <p className="py-4 text-center text-sm text-grey-500">No requests yet</p>
           ) : (
             requests.map((req) => (
@@ -47,30 +60,13 @@ export function WebhookDetail({ webhook, onClose }: WebhookDetailProps) {
                     <span className="rounded-md bg-grey-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-grey-600 dark:bg-white/5 dark:text-grey-400">
                       {req.method}
                     </span>
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-medium',
-                        req.statusCode < 400
-                          ? 'bg-green-500/10 text-green-500'
-                          : 'bg-red-500/10 text-red-500',
-                      )}
-                    >
-                      {req.statusCode}
-                    </span>
-                    <span className="text-xs text-grey-400">{req.duration}</span>
+                    {req.source_ip && (
+                      <span className="text-xs text-grey-400">{req.source_ip}</span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-grey-400">
-                      {formatDateTime(req.timestamp)}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="toss-press h-7 w-7 text-grey-400 hover:text-blue-500"
-                    >
-                      <RotateCcw className="h-3 w-3" />
-                    </Button>
-                  </div>
+                  <span className="text-xs text-grey-400">
+                    {formatDateTime(req.received_at)}
+                  </span>
                 </div>
 
                 {req.body && (
@@ -79,18 +75,18 @@ export function WebhookDetail({ webhook, onClose }: WebhookDetailProps) {
                       Body
                     </span>
                     <pre className="mt-1 overflow-x-auto rounded-lg bg-grey-900 px-3 py-2 text-xs text-grey-300 dark:bg-black/40">
-                      {JSON.stringify(JSON.parse(req.body), null, 2)}
+                      {tryParseJson(req.body)}
                     </pre>
                   </div>
                 )}
 
-                {req.response && (
+                {req.headers && Object.keys(req.headers).length > 0 && (
                   <div className="mt-2">
                     <span className="text-[10px] font-medium uppercase tracking-wider text-grey-400">
-                      Response
+                      Headers
                     </span>
                     <pre className="mt-1 overflow-x-auto rounded-lg bg-grey-50 px-3 py-2 text-xs text-grey-600 dark:bg-white/5 dark:text-grey-400">
-                      {JSON.stringify(JSON.parse(req.response), null, 2)}
+                      {JSON.stringify(req.headers, null, 2)}
                     </pre>
                   </div>
                 )}

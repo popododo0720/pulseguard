@@ -44,6 +44,11 @@ func parseCrontab(content, username string) []*pulseguardv1.DiscoveredCronJob {
 			continue
 		}
 
+		// Skip already-wrapped lines
+		if strings.Contains(line, "pulseguard-agent wrap") {
+			continue
+		}
+
 		schedule, command := parseCronLine(line)
 		if schedule == "" || command == "" {
 			continue

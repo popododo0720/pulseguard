@@ -1,5 +1,8 @@
 import { cn } from '@/lib/utils'
-import { useJobs, formatRelativeTime } from '@/hooks/use-mock-data'
+import { formatRelativeTime } from '@/lib/utils'
+import { useJobs, useAgents, useRerunJob, useDeleteJob } from '@/hooks/use-api'
+import type { Job, JobStatus } from '@/hooks/use-api'
+import { useMemo } from 'react'
 import { Play, MoreHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -8,7 +11,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import type { Job, JobStatus } from '@/lib/mock-data'
 
 function StatusBadge({ status }: { status: JobStatus }) {
   return (
@@ -41,7 +43,34 @@ interface JobListProps {
 }
 
 export function JobList({ onSelectJob, selectedJobId }: JobListProps) {
-  const jobs = useJobs()
+  const { data: jobs, isLoading } = useJobs()
+  const { data: agents } = useAgents()
+  const rerunJob = useRerunJob()
+  const deleteJob = useDeleteJob()
+
+  const agentMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    agents?.forEach((a) => { map[a.id] = a.hostname || a.name })
+    return map
+  }, [agents])
+
+  if (isLoading) {
+    return (
+      <div className="animate-fade-in-up rounded-2xl bg-white dark:bg-[#161b22]">
+        <div className="flex items-center justify-center py-16">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-grey-200 border-t-blue-500" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!jobs?.length) {
+    return (
+      <div className="animate-fade-in-up rounded-2xl bg-white dark:bg-[#161b22]">
+        <p className="py-16 text-center text-sm text-grey-400">No jobs configured yet</p>
+      </div>
+    )
+  }
 
   return (
     <div className="animate-fade-in-up rounded-2xl bg-white dark:bg-[#161b22]">
@@ -76,7 +105,9 @@ export function JobList({ onSelectJob, selectedJobId }: JobListProps) {
             <p className="mt-0.5 truncate text-xs text-grey-500">{job.command}</p>
           </div>
           <div className="flex items-center">
-            <span className="text-sm text-grey-700 dark:text-grey-300">{job.agentName}</span>
+            <span className="text-sm text-grey-700 dark:text-grey-300">
+              {agentMap[job.agent_id] || job.agent_id || '—'}
+            </span>
           </div>
           <div className="flex items-center">
             <code className="rounded-md bg-grey-100 px-2 py-0.5 text-xs text-grey-600 dark:bg-white/5 dark:text-grey-400">
@@ -84,17 +115,20 @@ export function JobList({ onSelectJob, selectedJobId }: JobListProps) {
             </code>
           </div>
           <div className="flex items-center">
-            <StatusBadge status={job.status} />
+            <StatusBadge status={job.last_status} />
           </div>
           <div className="flex items-center">
-            <span className="text-sm text-grey-500">{formatRelativeTime(job.lastRun)}</span>
+            <span className="text-sm text-grey-500">{formatRelativeTime(job.last_run_at)}</span>
           </div>
           <div className="flex items-center gap-1 w-20 justify-end">
             <Button
               variant="ghost"
               size="icon"
               className="toss-press h-8 w-8 text-grey-400 hover:bg-grey-100 hover:text-blue-500 dark:hover:bg-white/5"
-              onClick={(e) => { e.stopPropagation() }}
+              onClick={(e) => {
+                e.stopPropagation()
+                rerunJob.mutate(job.id)
+              }}
             >
               <Play className="h-3.5 w-3.5" />
             </Button>
@@ -113,7 +147,15 @@ export function JobList({ onSelectJob, selectedJobId }: JobListProps) {
                 <DropdownMenuItem>Edit</DropdownMenuItem>
                 <DropdownMenuItem>View History</DropdownMenuItem>
                 <DropdownMenuItem>Pause</DropdownMenuItem>
-                <DropdownMenuItem className="text-red-500">Delete</DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-red-500"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    deleteJob.mutate(job.id)
+                  }}
+                >
+                  Delete
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

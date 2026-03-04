@@ -1,11 +1,11 @@
-import { Clock, CheckCircle2, Server, Webhook } from 'lucide-react'
+import { Clock, CheckCircle2, Server, AlertTriangle } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { StatusChart } from '@/components/dashboard/StatusChart'
 import { RecentActivity } from '@/components/dashboard/RecentActivity'
-import { useDashboardStats } from '@/hooks/use-mock-data'
+import { useDashboardStats } from '@/hooks/use-api'
 
 export function DashboardPage() {
-  const stats = useDashboardStats()
+  const { data: stats, isLoading } = useDashboardStats()
 
   return (
     <div className="space-y-8">
@@ -23,30 +23,27 @@ export function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total Jobs"
-          value={stats.totalJobs}
+          value={isLoading ? '—' : (stats?.total_jobs ?? 0)}
           icon={Clock}
-          trend={{ value: 12, isPositive: true }}
           delay={0}
         />
         <StatCard
           label="Success Rate"
-          value={stats.successRate}
+          value={isLoading ? '—' : (stats?.success_rate ?? 0)}
           suffix="%"
           icon={CheckCircle2}
-          trend={{ value: 2.1, isPositive: true }}
           delay={50}
         />
         <StatCard
           label="Active Agents"
-          value={stats.activeAgents}
+          value={isLoading ? '—' : (stats?.total_agents ?? 0)}
           icon={Server}
           delay={100}
         />
         <StatCard
-          label="Webhooks"
-          value={stats.webhookCount}
-          icon={Webhook}
-          trend={{ value: 8, isPositive: true }}
+          label="Recent Failures"
+          value={isLoading ? '—' : (stats?.recent_failures ?? 0)}
+          icon={AlertTriangle}
           delay={150}
         />
       </div>

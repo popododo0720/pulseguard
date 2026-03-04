@@ -48,7 +48,7 @@ VOLUME ["/app/data"]
 ENV PULSEGUARD_DB_PATH=/app/data/pulseguard.db
 
 ENTRYPOINT ["/app/pulseguard-server"]
-CMD ["--port", "8080", "--grpc-port", "9090", "--db", "/app/data/pulseguard.db"]
+CMD ["--port", "8080", "--grpc-port", "9090", "--db", "/app/data/pulseguard.db", "--web-dir", "/app/web/dist"]
 
 # ============================================================================
 # Stage 4: Agent runtime

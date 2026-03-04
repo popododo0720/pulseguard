@@ -1,8 +1,9 @@
 import { cn } from '@/lib/utils'
-import { useWebhookEndpoints, formatRelativeTime } from '@/hooks/use-mock-data'
+import { formatRelativeTime } from '@/lib/utils'
+import { useWebhookEndpoints } from '@/hooks/use-api'
+import type { WebhookEndpoint } from '@/hooks/use-api'
 import { Copy, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { WebhookEndpoint } from '@/lib/mock-data'
 
 interface WebhookListProps {
   onSelectWebhook: (webhook: WebhookEndpoint) => void
@@ -10,7 +11,23 @@ interface WebhookListProps {
 }
 
 export function WebhookList({ onSelectWebhook, selectedWebhookId }: WebhookListProps) {
-  const webhooks = useWebhookEndpoints()
+  const { data: webhooks, isLoading } = useWebhookEndpoints()
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-grey-200 border-t-blue-500" />
+      </div>
+    )
+  }
+
+  if (!webhooks?.length) {
+    return (
+      <div className="rounded-2xl bg-white p-16 text-center dark:bg-[#161b22]">
+        <p className="text-sm text-grey-400">No webhook endpoints configured yet</p>
+      </div>
+    )
+  }
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -35,7 +52,7 @@ export function WebhookList({ onSelectWebhook, selectedWebhookId }: WebhookListP
                 <span
                   className={cn(
                     'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
-                    wh.isActive
+                    wh.enabled
                       ? 'bg-green-500/10 text-green-500'
                       : 'bg-grey-200 text-grey-500 dark:bg-grey-700/30 dark:text-grey-500',
                   )}
@@ -43,17 +60,14 @@ export function WebhookList({ onSelectWebhook, selectedWebhookId }: WebhookListP
                   <span
                     className={cn(
                       'h-1 w-1 rounded-full',
-                      wh.isActive ? 'bg-green-500 animate-pulse-dot' : 'bg-grey-400',
+                      wh.enabled ? 'bg-green-500 animate-pulse-dot' : 'bg-grey-400',
                     )}
                   />
-                  {wh.isActive ? 'Active' : 'Inactive'}
+                  {wh.enabled ? 'Active' : 'Inactive'}
                 </span>
               </div>
-              <p className="mt-1 text-xs text-grey-500">{wh.description}</p>
+              <p className="mt-1 text-xs text-grey-500">{wh.target_url}</p>
             </div>
-            <span className="ml-3 rounded-md bg-grey-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-grey-600 dark:bg-white/5 dark:text-grey-400">
-              {wh.method}
-            </span>
           </div>
 
           <div className="mt-4 flex items-center gap-1.5 rounded-xl bg-grey-50 px-3 py-2 dark:bg-black/20">
@@ -82,13 +96,13 @@ export function WebhookList({ onSelectWebhook, selectedWebhookId }: WebhookListP
             <div className="flex items-center gap-4">
               <div>
                 <span className="text-lg font-bold text-grey-900 dark:text-white">
-                  {wh.requestCount.toLocaleString()}
+                  {(wh.request_count ?? 0).toLocaleString()}
                 </span>
                 <span className="ml-1 text-xs text-grey-500">requests</span>
               </div>
             </div>
             <span className="text-xs text-grey-400">
-              Last: {formatRelativeTime(wh.lastRequest)}
+              Last: {formatRelativeTime(wh.last_request_at)}
             </span>
           </div>
         </div>

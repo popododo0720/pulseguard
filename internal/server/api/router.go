@@ -36,6 +36,7 @@ func NewRouter(s *store.Store, dispatcher *grpc.CommandDispatcher, proxy *webhoo
 		// Agents
 		r.Get("/agents", listAgentsHandler(s))
 		r.Get("/agents/{id}", getAgentHandler(s))
+		r.Delete("/agents/{id}", deleteAgentHandler(s))
 
 		// Jobs
 		r.Get("/jobs", listJobsHandler(s))
@@ -46,6 +47,15 @@ func NewRouter(s *store.Store, dispatcher *grpc.CommandDispatcher, proxy *webhoo
 		r.Post("/jobs/{id}/rerun", rerunJobHandler(s, dispatcher))
 		r.Get("/jobs/{id}/executions", listJobExecutionsHandler(s))
 		r.Post("/jobs/{id}/report", reportJobResultHandler(s, authToken))
+
+		// Notifications
+		r.Get("/notifications", listNotificationChannelsHandler(s))
+		r.Post("/notifications", createNotificationChannelHandler(s))
+		r.Put("/notifications/{id}", updateNotificationChannelHandler(s))
+		r.Delete("/notifications/{id}", deleteNotificationChannelHandler(s))
+
+		// Settings
+		r.Get("/settings", settingsHandler(authToken))
 
 		// Webhook endpoints
 		r.Get("/webhook-endpoints", listWebhookEndpointsHandler(s))

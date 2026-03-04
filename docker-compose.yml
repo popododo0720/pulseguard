@@ -1,0 +1,33 @@
+services:
+  server:
+    build:
+      context: .
+      target: server
+    container_name: pulseguard-server
+    ports:
+      - "8080:8080"   # REST API + Web UI
+      - "9090:9090"   # gRPC (for agents)
+    volumes:
+      - pulseguard-data:/app/data
+    environment:
+      - TZ=Asia/Seoul
+    restart: unless-stopped
+
+  agent:
+    build:
+      context: .
+      target: agent
+    container_name: pulseguard-agent
+    command:
+      - "--server"
+      - "server:9090"
+      - "--token"
+      - "${PULSEGUARD_AGENT_TOKEN:-dev-token}"
+    depends_on:
+      - server
+    environment:
+      - TZ=Asia/Seoul
+    restart: unless-stopped
+
+volumes:
+  pulseguard-data:

@@ -1,0 +1,46 @@
+# Binaries
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go
+/vendor/
+*.test
+*.out
+*.prof
+
+# Generated protobuf (regenerated from proto/)
+/gen/
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+
+# Web
+/web/node_modules/
+/web/dist/
+/web/.vite/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+docker-compose.override.yml
+
+# Temp
+tmp/
+*.log

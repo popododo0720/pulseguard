@@ -1,0 +1,178 @@
+syntax = "proto3";
+
+package pulseguard.v1;
+
+option go_package = "github.com/pulseguard/pulseguard/gen/pulseguard/v1;pulseguardv1";
+
+// AgentService handles all communication between agent and server.
+service AgentService {
+  // Register registers a new agent with the server and receives initial config.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+
+  // Heartbeat sends periodic health check from agent, receives config updates.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // ReportJobResult reports the result of a job execution.
+  rpc ReportJobResult(ReportJobResultRequest) returns (ReportJobResultResponse);
+
+  // CommandStream opens a server-streaming connection for receiving commands.
+  // Agent connects once and receives commands (rerun, stop, config update) as they arrive.
+  rpc CommandStream(CommandStreamRequest) returns (stream Command);
+
+  // ReportDiscoveredJobs reports crontab entries discovered by the agent.
+  rpc ReportDiscoveredJobs(ReportDiscoveredJobsRequest) returns (ReportDiscoveredJobsResponse);
+}
+
+// ============================================================================
+// Register
+// ============================================================================
+
+message RegisterRequest {
+  string hostname = 1;
+  string ip_address = 2;
+  string os = 3;
+  string arch = 4;
+  string agent_version = 5;
+  map<string, string> labels = 6;
+}
+
+message RegisterResponse {
+  string agent_id = 1;
+  int32 heartbeat_interval_seconds = 2;
+  repeated JobConfig jobs = 3;
+}
+
+// ============================================================================
+// Heartbeat
+// ============================================================================
+
+message HeartbeatRequest {
+  string agent_id = 1;
+  repeated RunningJob running_jobs = 2;
+  AgentMetrics metrics = 3;
+}
+
+message RunningJob {
+  string job_id = 1;
+  string execution_id = 2;
+  int64 started_at_unix = 3;
+}
+
+message AgentMetrics {
+  double cpu_usage_percent = 1;
+  double memory_usage_percent = 2;
+  int64 disk_available_bytes = 3;
+}
+
+message HeartbeatResponse {
+  repeated JobConfig updated_jobs = 1;
+  repeated string removed_job_ids = 2;
+}
+
+// ============================================================================
+// Job Result
+// ============================================================================
+
+message ReportJobResultRequest {
+  string agent_id = 1;
+  string job_id = 2;
+  string execution_id = 3;
+  int32 exit_code = 4;
+  string stdout = 5;
+  string stderr = 6;
+  int64 started_at_unix = 7;
+  int64 finished_at_unix = 8;
+  int64 duration_ms = 9;
+  string trigger = 10; // "scheduled", "manual", "retry"
+  int32 retry_count = 11;
+  string error = 12; // system-level error (timeout, permission denied, etc.)
+}
+
+message ReportJobResultResponse {
+  string status = 1; // "success" or "failure" (server-evaluated against success conditions)
+  bool should_retry = 2;
+  int32 retry_delay_seconds = 3;
+}
+
+// ============================================================================
+// Command Stream
+// ============================================================================
+
+message CommandStreamRequest {
+  string agent_id = 1;
+}
+
+message Command {
+  string command_id = 1;
+  oneof payload {
+    RunJobCommand run_job = 2;
+    StopJobCommand stop_job = 3;
+    UpdateConfigCommand update_config = 4;
+  }
+}
+
+message RunJobCommand {
+  string job_id = 1;
+  string execution_id = 2;
+  string trigger = 3; // "manual", "retry"
+}
+
+message StopJobCommand {
+  string job_id = 1;
+  string execution_id = 2;
+}
+
+message UpdateConfigCommand {
+  repeated JobConfig jobs = 1;
+}
+
+// ============================================================================
+// Discovery
+// ============================================================================
+
+message ReportDiscoveredJobsRequest {
+  string agent_id = 1;
+  repeated DiscoveredCronJob jobs = 2;
+}
+
+message DiscoveredCronJob {
+  string schedule = 1;
+  string command = 2;
+  string user = 3;
+  string source = 4; // "crontab", "systemd-timer"
+}
+
+message ReportDiscoveredJobsResponse {
+  int32 imported_count = 1;
+}
+
+// ============================================================================
+// Shared Types
+// ============================================================================
+
+message JobConfig {
+  string id = 1;
+  string name = 2;
+  string schedule = 3; // cron expression (e.g., "*/5 * * * *")
+  string command = 4;
+  string working_dir = 5;
+  int32 timeout_seconds = 6;
+  SuccessConditions success_conditions = 7;
+  FailurePolicy failure_policy = 8;
+  bool enabled = 9;
+  map<string, string> env = 10;
+}
+
+message SuccessConditions {
+  int32 expected_exit_code = 1;
+  string stdout_contains = 2;
+  string stdout_endswith = 3;
+  bool stderr_empty = 4;
+  string file_exists = 5;
+}
+
+message FailurePolicy {
+  int32 max_retries = 1;
+  int32 retry_delay_seconds = 2;
+  repeated string notify_channels = 3;
+}

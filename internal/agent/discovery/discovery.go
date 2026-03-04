@@ -29,22 +29,23 @@ func DiscoverCrontab() []*pulseguardv1.DiscoveredCronJob {
 
 func parseCrontab(content, username string) []*pulseguardv1.DiscoveredCronJob {
 	var jobs []*pulseguardv1.DiscoveredCronJob
+	var envVars []string
 
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		// Skip comments and empty lines
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		// Skip variable assignments
 		if strings.Contains(line, "=") && !strings.HasPrefix(line, "*") && !strings.HasPrefix(line, "@") {
+			if k, _, ok := strings.Cut(line, "="); ok && !strings.Contains(k, " ") && k == strings.ToUpper(k) {
+				envVars = append(envVars, line)
+			}
 			continue
 		}
 
-		// Skip already-wrapped lines
 		if strings.Contains(line, "pulseguard-agent wrap") {
 			continue
 		}
@@ -54,9 +55,18 @@ func parseCrontab(content, username string) []*pulseguardv1.DiscoveredCronJob {
 			continue
 		}
 
+		fullCommand := command
+		if len(envVars) > 0 {
+			var exports []string
+			for _, ev := range envVars {
+				exports = append(exports, "export "+ev)
+			}
+			fullCommand = strings.Join(exports, " && ") + " && " + command
+		}
+
 		jobs = append(jobs, &pulseguardv1.DiscoveredCronJob{
 			Schedule: schedule,
-			Command:  command,
+			Command:  fullCommand,
 			User:     username,
 			Source:   "crontab",
 		})

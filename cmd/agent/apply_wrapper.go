@@ -57,6 +57,7 @@ func runApplyWrapper(args []string) {
 		wrapLine := fmt.Sprintf("%s wrap --server %s --token %s --job-id %s --command '%s'",
 			agentPath, *server, *token, job.ID, escapedCmd)
 
+		cmdCore := stripExportPrefix(job.Command)
 		for i, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
@@ -65,14 +66,14 @@ func runApplyWrapper(args []string) {
 			if strings.Contains(line, "pulseguard-agent wrap") {
 				continue
 			}
-			if strings.Contains(line, job.Command) {
+			if strings.Contains(line, cmdCore) {
 				schedule, _ := parseCronFields(trimmed)
 				if schedule == "" {
 					continue
 				}
 				lines[i] = schedule + " " + wrapLine
 				modified = true
-				slog.Info("wrapped job", "job_id", job.ID, "command", job.Command)
+				slog.Info("wrapped job", "job_id", job.ID, "command", cmdCore)
 				break
 			}
 		}
@@ -98,6 +99,17 @@ func runApplyWrapper(args []string) {
 			slog.Error("failed to enable job", "job_id", job.ID, "error", err)
 		}
 	}
+}
+
+func stripExportPrefix(cmd string) string {
+	for strings.HasPrefix(cmd, "export ") {
+		idx := strings.Index(cmd, " && ")
+		if idx < 0 {
+			break
+		}
+		cmd = cmd[idx+4:]
+	}
+	return cmd
 }
 
 func parseCronFields(line string) (string, string) {
